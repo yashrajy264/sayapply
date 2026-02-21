@@ -27,45 +27,6 @@ if (window.location.hostname.includes('boards.greenhouse.io') || window.location
 }
 
 console.log(`Say Apply: Detected platform ${platform}`);
-createFloatingApplyButton();
-
-function createFloatingApplyButton() {
-    // Remove existing if any
-    const existing = document.getElementById('say-apply-floating-btn');
-    if (existing) existing.remove();
-
-    const btn = document.createElement('button');
-    btn.id = 'say-apply-floating-btn';
-    btn.innerText = 'Auto-Apply with AI';
-    btn.style.position = 'fixed';
-    btn.style.bottom = '20px';
-    btn.style.right = '20px';
-    btn.style.zIndex = '999999';
-    btn.style.backgroundColor = '#10b981';
-    btn.style.color = 'white';
-    btn.style.border = 'none';
-    btn.style.padding = '12px 24px';
-    btn.style.borderRadius = '8px';
-    btn.style.fontWeight = 'bold';
-    btn.style.cursor = 'pointer';
-    btn.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-
-    btn.onclick = async () => {
-        btn.innerText = 'Applying...';
-        btn.disabled = true;
-        btn.style.backgroundColor = '#374151';
-        try {
-            await startPlatformApplication();
-        } catch (err) {
-            console.error(err);
-        }
-        btn.innerText = 'Auto-Apply with AI';
-        btn.disabled = false;
-        btn.style.backgroundColor = '#10b981';
-    };
-
-    document.body.appendChild(btn);
-}
 
 async function startPlatformApplication() {
     if (isRunning) return;

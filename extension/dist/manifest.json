@@ -35,9 +35,6 @@
         "https://*.myworkdayjobs.com/*"
       ],
       "js": [
-        "content_field_detector.js",
-        "content_pdf_injector.js",
-        "content_form_filler.js",
         "content_linkedin.js",
         "content_linkedin_profile.js",
         "content_platforms.js",
@@ -48,5 +45,21 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "*.js",
+        "*.css",
+        "*.png",
+        "*.jpg",
+        "*.svg"
+      ],
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://boards.greenhouse.io/*",
+        "https://jobs.lever.co/*"
+      ]
+    }
+  ]
 }

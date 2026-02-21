@@ -20,7 +20,8 @@ const ProfileTab = () => {
     expectedSalary: '',
     noticePeriod: '',
     languages: [],
-    professionalSummary: ''
+    professionalSummary: '',
+    experience: ''
   });
 
   const [resumeName, setResumeName] = useState('');
@@ -111,7 +112,7 @@ const ProfileTab = () => {
           skills: d.skills || prev.skills,
           // Education and Experience are raw text for now, user can refine
           education: d.educationRaw || prev.education,
-          // We might want to parse yearsOfExperience from raw text in a real app
+          experience: d.experienceRaw || prev.experience,
         }));
 
         toast.success('Profile imported!', { id: 'import-toast', description: 'Please review and save your details below.' });
@@ -235,6 +236,18 @@ const ProfileTab = () => {
               value={profile.yearsOfExperience}
               onChange={handleChange}
               className="w-full px-3 py-2.5 text-sm bg-zinc-100 dark:bg-[#171717] rounded-lg border border-transparent focus:border-zinc-300 dark:focus:border-[#333] focus:ring-0 placeholder-zinc-500 dark:placeholder-zinc-600 text-zinc-900 dark:text-white transition-colors"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-[11px] text-zinc-500 font-medium ml-1">Experience</span>
+            <textarea
+              name="experience"
+              placeholder="Software Engineer at Google, 2020-Present"
+              value={profile.experience}
+              onChange={handleChange}
+              rows={5}
+              className="w-full px-3 py-2.5 text-sm bg-zinc-100 dark:bg-[#171717] rounded-lg border border-transparent focus:border-zinc-300 dark:focus:border-[#333] focus:ring-0 placeholder-zinc-500 dark:placeholder-zinc-600 text-zinc-900 dark:text-white resize-none transition-colors"
             />
           </div>
 

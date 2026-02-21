@@ -1,154 +1,227 @@
 const autoScrollPage = async () => {
+    console.log("Say Apply: Auto-scrolling to hydrate content...");
     return new Promise((resolve) => {
         let totalHeight = 0;
         const distance = 500;
+        const maxScroll = 5000;
         const timer = setInterval(() => {
             const scrollHeight = document.body.scrollHeight;
             window.scrollBy(0, distance);
             totalHeight += distance;
 
-            // Give it a brief moment to trigger lazy loads
-            if (totalHeight >= scrollHeight) {
+            // Check if we've reached the bottom or a reasonable depth
+            if (totalHeight >= scrollHeight || totalHeight >= maxScroll) {
                 clearInterval(timer);
-                // Scroll back to top so user isn't left at the bottom
                 window.scrollTo(0, 0);
-                // Extra buffer to ensure React finishes mounting the components we just scrolled past
-                setTimeout(resolve, 1000);
+                setTimeout(resolve, 800); // Give time for rendering
             }
-        }, 100); // Fast scroll down
+        }, 150);
     });
 };
 
 const expandAllSections = async () => {
-    // First, scroll to force DOM nodes to exist
+    console.log("Say Apply: Expanding profile sections...");
     await autoScrollPage();
 
-    // LinkedIn often hides experience description and other details behind "see more" buttons
-    // The classes change, but common ones are:
-    const expandButtons = document.querySelectorAll(`
-        button.inline-show-more-text__button, 
-        button.pv-profile-section__see-more-inline,
-        button.pvs-list__bottom-action
-    `);
+    const expandSelectors = [
+        '.inline-show-more-text__button',
+        'button.pvs-list__bottom-action',
+        'a.pvs-list__footer-action',
+        '.pv-profile-section__see-more-inline',
+        '.lt-line-clamp__more'
+    ];
 
-    // Click buttons that contain text like "more", "see all", "show all"
-    let clicked = false;
-    expandButtons.forEach(btn => {
-        const text = btn.innerText.toLowerCase();
-        if (text.includes('more') || text.includes('see all') || text.includes('show all')) {
-            try {
-                btn.click();
-                clicked = true;
-            } catch (e) {
-                console.warn('Say Apply Scraper: Failed to click an expand button', e);
+    // Try multiple rounds of expansion as clicking one might reveal another
+    for (let round = 0; round < 2; round++) {
+        const expandButtons = document.querySelectorAll(expandSelectors.join(', '));
+        console.log(`Say Apply: Round ${round + 1}, found ${expandButtons.length} potential expand buttons`);
+
+        for (const btn of expandButtons) {
+            const text = btn.innerText.toLowerCase();
+            const isExpandable = text.includes('more') ||
+                text.includes('see all') ||
+                text.includes('show all') ||
+                text.includes('see more');
+
+            if (isExpandable && btn.offsetParent !== null) { // Check if visible
+                try {
+                    btn.click();
+                    // Small delay to allow expansion
+                    await new Promise(r => setTimeout(r, 200));
+                } catch (e) {
+                    // Silently fail if button is detached
+                }
             }
         }
-    });
-
-    // Wait a brief moment for the DOM to update with expanded text
-    if (clicked) {
-        await new Promise(resolve => setTimeout(resolve, 800));
     }
+
+    await new Promise(resolve => setTimeout(resolve, 500));
 };
 
 const scrapeLinkedInProfile = async () => {
     const profile = {};
+    console.log("Say Apply: Starting profile scrape...");
 
     try {
-        // Expand hidden text first
         await expandAllSections();
 
-        // Name
-        const nameEl = document.querySelector('h1.text-heading-xlarge') ||
-            document.querySelector('h1') ||
-            document.querySelector('.text-heading-xlarge');
-        if (nameEl) profile.name = nameEl.innerText.trim();
+        // 1. Name
+        const nameSelectors = [
+            'h1.text-heading-xlarge',
+            'main h1',
+            '.pv-text-details__left-panel h1',
+            '.text-heading-xlarge',
+            'h1'
+        ];
+        for (const s of nameSelectors) {
+            const el = document.querySelector(s);
+            if (el && el.innerText.trim() && !el.innerText.includes('\n')) {
+                profile.name = el.innerText.trim();
+                console.log(`Say Apply: Found name: "${profile.name}" using selector: "${s}"`);
+                break;
+            }
+        }
 
-        // Headline
-        const headlineEl = document.querySelector('.text-body-medium.break-words') ||
-            document.querySelector('[data-generated-suggestion-target]') ||
-            document.querySelector('.pv-text-details__left-panel .text-body-medium');
-        if (headlineEl) profile.headline = headlineEl.innerText.trim();
+        // 2. Headline
+        const headlineSelectors = [
+            '.text-body-medium.break-words',
+            '.pv-text-details__left-panel .text-body-medium',
+            '[data-generated-suggestion-target]',
+            'main .text-body-medium'
+        ];
+        for (const s of headlineSelectors) {
+            const el = document.querySelector(s);
+            if (el && el.innerText.trim()) {
+                profile.headline = el.innerText.trim();
+                console.log(`Say Apply: Found headline: "${profile.headline}" using selector: "${s}"`);
+                break;
+            }
+        }
 
-        // About
-        const aboutSection = document.getElementById('about');
-        if (aboutSection) {
-            const aboutContainer = aboutSection.closest('section');
-            if (aboutContainer) {
-                const textElements = aboutContainer.querySelectorAll('.display-flex .visually-hidden, span[aria-hidden="true"]');
-                if (textElements.length > 0) {
-                    profile.about = Array.from(textElements).map(el => el.innerText).join('\n').trim();
-                } else {
-                    profile.about = aboutContainer.innerText.replace('About', '').trim();
+        // 3. About
+        const aboutSelectors = ['#about', '[id="about"]', 'section.pv-about-section', '.pv-shared-text-with-see-more'];
+        for (const s of aboutSelectors) {
+            const el = document.querySelector(s);
+            if (el) {
+                // If it's a section, find the content inside
+                const content = el.tagName === 'SECTION' ? el.querySelector('.display-flex.mt2') || el : el;
+                const text = content.innerText.replace('About', '').trim();
+                if (text.length > 10) {
+                    profile.about = text;
+                    console.log(`Say Apply: Found about using selector: "${s}"`);
+                    break;
                 }
             }
         }
 
-        // Generic section scraper helper
-        const scrapeSection = (sectionId) => {
-            const section = document.getElementById(sectionId);
-            if (!section) return null;
+        const scrapeSection = (id) => {
+            console.log(`Say Apply: Attempting to scrape section "${id}"`);
+            let section = document.getElementById(id) || document.querySelector(`[id="${id}"]`);
 
-            const container = section.closest('section');
-            if (!container) return null;
+            if (section) {
+                console.log(`Say Apply: Found section "${id}" by ID`);
+            } else {
+                console.log(`Say Apply: Section "${id}" not found by ID, trying H2 headers...`);
+                const headers = Array.from(document.querySelectorAll('h2'));
+                const targetHeader = headers.find(h => {
+                    const text = h.innerText.toLowerCase();
+                    return text === id.toLowerCase() ||
+                        text.includes(`${id} `) ||
+                        text.includes(` ${id}`) ||
+                        (id === 'experience' && text.includes('work experience'));
+                });
+                if (targetHeader) {
+                    console.log(`Say Apply: Found section "${id}" by H2 header: "${targetHeader.innerText}"`);
+                    section = targetHeader.closest('section') || targetHeader.parentElement;
+                }
+            }
 
-            // Try to extract just the text content from the list items, ignoring the UI buttons
-            const items = container.querySelectorAll('.pvs-list__item--line-separated, .artdeco-list__item');
+            // Third fallback: Look for specific LinkedIn section anchors
+            if (!section) {
+                console.log(`Say Apply: Section "${id}" not found by H2, trying anchors/aria-labels...`);
+                const anchors = Array.from(document.querySelectorAll('div[id], section[id], a[name]'));
+                const targetAnchor = anchors.find(a => (a.id || a.name || "").toLowerCase().includes(id.toLowerCase()));
+                if (targetAnchor) {
+                    console.log(`Say Apply: Found section "${id}" by anchor: "${targetAnchor.id || targetAnchor.name}"`);
+                    section = targetAnchor.closest('section') || targetAnchor;
+                }
+            }
+
+            if (!section) {
+                console.warn(`Say Apply: Completely failed to find section "${id}" after all fallbacks.`);
+                return null;
+            }
+
+            const container = section.tagName === 'SECTION' ? section : section.closest('section') || section;
+            console.log(`Say Apply: Extracting items from container for "${id}"`);
+
+            // Look for list items or nested text spans
+            const itemSelectors = [
+                '.pvs-list__item--line-separated',
+                '.artdeco-list__item',
+                '.pvs-entity',
+                '.experience-item',
+                'li.pvs-list__item'
+            ];
+            const items = container.querySelectorAll(itemSelectors.join(', '));
+
             if (items.length > 0) {
+                console.log(`Say Apply: Found ${items.length} items in section "${id}"`);
                 return Array.from(items).map(item => {
-                    // Extract text, remove typical visually hidden screen reader duplicates
                     const spans = item.querySelectorAll('span[aria-hidden="true"]');
                     if (spans.length > 0) {
-                        return Array.from(spans).map(s => s.innerText.trim()).filter(Boolean).join('\n');
+                        return Array.from(spans)
+                            .map(s => s.innerText.trim())
+                            .filter((val, index, self) => val && self.indexOf(val) === index) // Unique lines
+                            .join('\n');
                     }
-                    return item.innerText.trim();
+                    return item.innerText.replace(/\s+/g, ' ').trim();
                 }).join('\n\n');
             }
 
-            // Fallback to dumping the whole section text if distinct items aren't found
-            return container.innerText.trim();
+            console.log(`Say Apply: No specific items found, returning raw text for section "${id}"`);
+            return container.innerText.replace(id.charAt(0).toUpperCase() + id.slice(1), '').trim();
         };
 
-        // Experience
-        profile.experienceRaw = scrapeSection('experience');
+        const scraperData = {
+            ...profile,
+            experienceRaw: scrapeSection('experience'),
+            educationRaw: scrapeSection('education')
+        };
 
-        // Education
-        profile.educationRaw = scrapeSection('education');
+        // 4. Skills
+        console.log("Say Apply: Attempting to scrape Skills");
+        let skillsSection = document.getElementById('skills');
+        if (!skillsSection) {
+            const h2s = Array.from(document.querySelectorAll('h2'));
+            const skillsH2 = h2s.find(h => h.innerText.toLowerCase().includes('skills'));
+            if (skillsH2) skillsSection = skillsH2.closest('section') || skillsH2;
+        }
 
-        // Skills
-        const skillsSection = document.getElementById('skills');
         if (skillsSection) {
-            const skillsContainer = skillsSection.closest('section');
-            if (skillsContainer) {
-                const skillSpans = skillsContainer.querySelectorAll('.artdeco-pill span[aria-hidden="true"], .pvs-list__item--with-top-padding span[aria-hidden="true"]');
-                if (skillSpans.length > 0) {
-                    profile.skills = Array.from(skillSpans).map(s => s.innerText.trim()).filter(Boolean);
-                } else {
-                    // Use new helper
-                    profile.skillsRaw = scrapeSection('skills');
-                }
+            const container = skillsSection.tagName === 'SECTION' ? skillsSection : skillsSection.closest('section') || skillsSection;
+            const skillEls = container.querySelectorAll('.pvs-list__item--line-separated span[aria-hidden="true"], .artdeco-pill span[aria-hidden="true"], .pv-skill-category-entity__name-text');
+            if (skillEls.length > 0) {
+                scraperData.skills = Array.from(new Set(Array.from(skillEls).map(s => s.innerText.trim()).filter(Boolean)));
+                console.log(`Say Apply: Found ${scraperData.skills.length} skills`);
+            } else {
+                scraperData.skillsRaw = scrapeSection('skills');
             }
         }
-    } catch (error) {
-        console.error("Say Apply Scraper: Error scraping profile data", error);
-    }
 
-    return profile;
+        console.log("Say Apply: Scrape complete", scraperData);
+        return scraperData;
+    } catch (error) {
+        console.error("Say Apply: Scraper error", error);
+        throw error;
+    }
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SCRAPE_PROFILE') {
-        console.log("Say Apply Scraper: Received SCRAPE_PROFILE message");
-        // Must return true synchronously and call sendResponse asynchronously
         scrapeLinkedInProfile()
-            .then(data => {
-                console.log("Say Apply Scraper: Scraped data:", data);
-                sendResponse({ success: true, data });
-            })
-            .catch(e => {
-                console.error("Say Apply Scraper: Error in listener", e);
-                sendResponse({ success: false, error: e.message });
-            });
+            .then(data => sendResponse({ success: true, data }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
     }
 });

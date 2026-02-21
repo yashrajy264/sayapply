@@ -7,9 +7,6 @@ module.exports = {
   entry: {
     background: './background.js',
     sidepanel: './sidepanel/index.jsx',
-    content_field_detector: './content/field-detector.js',
-    content_pdf_injector: './content/pdf-injector.js',
-    content_form_filler: './content/form-filler.js',
     content_linkedin: './content/linkedin-easy-apply.js',
     content_linkedin_profile: './content/linkedin-profile-scraper.js',
     content_platforms: './content/platforms.js',
@@ -18,8 +15,10 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: '[name].js',
+    publicPath: '/',
     clean: true
   },
+  devtool: false,
   module: {
     rules: [
       {
