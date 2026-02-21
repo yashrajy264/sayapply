@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Say Apply — Job Application Assistant",
+  "version": "1.0.0",
+  "description": "Automatically fills LinkedIn Easy Apply forms using your profile and Gemini AI",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "sidePanel",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://boards.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "Open Say Apply"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://*.myworkdayjobs.com/*"
+      ],
+      "js": [
+        "content_field_detector.js",
+        "content_pdf_injector.js",
+        "content_form_filler.js",
+        "content_linkedin.js",
+        "content_linkedin_profile.js",
+        "content_platforms.js",
+        "content_scraper.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
