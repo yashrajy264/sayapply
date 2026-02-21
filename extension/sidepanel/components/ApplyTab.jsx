@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings, getApplicationHistory } from '../../utils/storage';
+import { getSettings, saveSettings, getApplicationHistory, getProfile } from '../../utils/storage';
 import JobStatusCard from './JobStatusCard';
 import QuestionAlert from './QuestionAlert';
+import { generateResumePDF } from '../../utils/pdf-generator';
 
 const ApplyTab = () => {
   const [config, setConfig] = useState({
@@ -69,6 +70,45 @@ const ApplyTab = () => {
     setIsRunning(true); // Resume
   };
 
+  const [isTailoring, setIsTailoring] = useState(false);
+  const [tailoredData, setTailoredData] = useState(null);
+
+  const handleTailorResume = () => {
+    setIsTailoring(true);
+    setTailoredData(null);
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'SCRAPE_PAGE_TEXT' }, (response) => {
+          if (response && response.text) {
+            chrome.runtime.sendMessage({
+              type: 'TAILOR_RESUME',
+              payload: { jobDescription: response.text }
+            }, (result) => {
+              setIsTailoring(false);
+              if (result && result.success) {
+                setTailoredData(result.result);
+              } else {
+                alert("Tailoring failed: " + (result?.error || "Unknown error"));
+              }
+            });
+          } else {
+            setIsTailoring(false);
+            alert("Could not extract job description. Try clicking on the job description area first.");
+          }
+        });
+      }
+    });
+  };
+
+  const handleDownloadPDF = async () => {
+    const profile = await getProfile();
+    generateResumePDF({
+      ...tailoredData,
+      name: profile.fullName,
+      contact: profile.email
+    });
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Alert Section */}
@@ -82,6 +122,57 @@ const ApplyTab = () => {
           }}
         />
       )}
+
+      {/* Resume Optimization Section */}
+      <div className="bg-gradient-to-br from-[#10b981]/10 to-transparent p-4 rounded-xl border border-[#10b981]/20 shadow-sm">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-sm font-bold flex items-center gap-2">
+            <span>🚀</span> Resume Optimization
+          </h2>
+          {!tailoredData && (
+            <button
+              onClick={handleTailorResume}
+              disabled={isTailoring}
+              className="text-xs px-3 py-1 bg-[#10b981] text-white rounded font-bold hover:bg-[#059669] transition-colors disabled:opacity-50"
+            >
+              {isTailoring ? 'Optimizing...' : 'Tailor for this Job'}
+            </button>
+          )}
+        </div>
+
+        {isTailoring && (
+          <div className="text-[10px] text-zinc-500 text-center py-4 animate-pulse">
+            AI is aligning your skills with the job description...
+          </div>
+        )}
+
+        {tailoredData && (
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="p-3 bg-zinc-50 dark:bg-[#0f0f0f] border border-zinc-200 dark:border-[#333] rounded-lg">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">Tailored Summary</label>
+              <p className="text-[10px] leading-relaxed italic">"{tailoredData.summary}"</p>
+            </div>
+            <button
+              onClick={handleDownloadPDF}
+              className="w-full py-2 bg-zinc-900 dark:bg-white text-white dark:text-black text-xs font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            >
+              <span>📄</span> Download Tailored PDF
+            </button>
+            <button
+              onClick={() => setTailoredData(null)}
+              className="w-full text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              Reset
+            </button>
+          </div>
+        )}
+
+        {!isTailoring && !tailoredData && (
+          <p className="text-[10px] text-zinc-500">
+            Click to rewrite your summary and experience bullet points to match the current job's keywords.
+          </p>
+        )}
+      </div>
 
       {/* Configuration Section */}
       <div className="space-y-4">

@@ -1,6 +1,7 @@
 import { callGemini } from './utils/gemini';
 import { analyzeJobFit } from './utils/api';
 import { getGeminiApiKey, saveAnswer, getProfile, getSettings } from './utils/storage';
+import { buildGeminiPrompt } from './utils/helpers';
 
 // Open Side Panel on icon click
 chrome.sidePanel
@@ -15,6 +16,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'JOB_ANALYSIS') {
     handleJobAnalysis(message, sendResponse);
+    return true;
+  }
+
+  if (message.type === 'GENERATE_OUTREACH') {
+    handleGenerateOutreach(message, sendResponse);
+    return true;
+  }
+
+  if (message.type === 'TAILOR_RESUME') {
+    handleTailorResume(message, sendResponse);
     return true;
   }
 
@@ -87,6 +98,71 @@ async function handleJobAnalysis(message, sendResponse) {
   }
 }
 
+async function handleGenerateOutreach(message, sendResponse) {
+  try {
+    const apiKey = await getGeminiApiKey();
+    const profile = await getProfile();
+    const { title, company, snippet } = message.payload;
+
+    const context = `Job Title: ${title}\nCompany: ${company}\nJob Snippet: ${snippet}`;
+    const prompt = buildGeminiPrompt('generate_outreach', profile, '', context);
+
+    const result = await callGemini(prompt, apiKey, { temperature: 0.7 });
+
+    if (result && result.success) {
+      let text = result.result;
+      if (text.startsWith('```json')) {
+        text = text.replace(/```json/g, '').replace(/```/g, '');
+      }
+      try {
+        const parsed = JSON.parse(text);
+        sendResponse({ success: true, result: parsed });
+      } catch (e) {
+        sendResponse({ success: false, error: "Parsing error in outreach generation" });
+      }
+    } else {
+      sendResponse(result);
+    }
+  } catch (error) {
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+async function handleTailorResume(message, sendResponse) {
+  try {
+    const apiKey = await getGeminiApiKey();
+    const profile = await getProfile();
+    const { jobDescription } = message.payload;
+
+    if (!jobDescription) {
+      sendResponse({ success: false, error: "No job description provided" });
+      return;
+    }
+
+    const context = `Job Description:\n${jobDescription}`;
+    const prompt = buildGeminiPrompt('tailor_resume', profile, '', context);
+
+    const result = await callGemini(prompt, apiKey, { temperature: 0.3 });
+
+    if (result && result.success) {
+      let text = result.result;
+      if (text.startsWith('```json')) {
+        text = text.replace(/```json/g, '').replace(/```/g, '');
+      }
+      try {
+        const parsed = JSON.parse(text);
+        sendResponse({ success: true, result: parsed });
+      } catch (e) {
+        sendResponse({ success: false, error: "Parsing error in resume tailoring" });
+      }
+    } else {
+      sendResponse(result);
+    }
+  } catch (error) {
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
 async function handleScoreJobsBatch(scrapedJobs) {
   try {
     const apiKey = await getGeminiApiKey();
@@ -105,7 +181,7 @@ async function handleScoreJobsBatch(scrapedJobs) {
       snippet: j.snippet
     }));
 
-    const prompt = `User Profile:\n${JSON.stringify(profile, null, 2)}\n\nJobs Batch:\n${JSON.stringify(promptPayload, null, 2)}\n\nTask: Rate the compatibility of each job with the User Profile from 1 to 100. Provide a 1-sentence reason. Return a valid JSON array of objects, with each object containing "id" (the matching id from the input), "score" (number), and "reason" (string).`;
+    const prompt = buildGeminiPrompt('score_batch', profile, promptPayload);
 
     const result = await callGemini(prompt, apiKey, { temperature: 0.2 });
 

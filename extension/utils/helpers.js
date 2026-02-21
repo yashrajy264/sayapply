@@ -74,5 +74,13 @@ export const buildGeminiPrompt = (type, profile, fieldLabel, fieldType, options,
     return `User Profile:\n${profileJson}${context}\n\nForm Fields Array:\n${JSON.stringify(fieldLabel, null, 2)}\n\nTask: Map the user's profile to the provided form fields. For 'file' types, specify the filename if a resume exists in the profile, or null. For 'checkbox', 'radio', and 'select' types, provide the exact match from the available options. If a field cannot be definitively answered from the profile, return an empty string "" for that field's answer.\n\nReturn a valid JSON object ONLY, where the keys are the field \`id\`s and the values are the generated answers. Example: { "sayapply_field_0": "John", "sayapply_field_1": "yes" }`;
   }
 
+  if (type === 'generate_outreach') {
+    return `User Profile:\n${profileJson}${context}\n\nTask: Generate a personalized LinkedIn connection request (max 280 chars) and a short professional cold email for this role. Mention specific projects or skills from the profile that match the job description. \n\nReturn JSON ONLY: { "linkedin": "text...", "email": "text..." }`;
+  }
+
+  if (type === 'tailor_resume') {
+    return `User Profile:\n${profileJson}${context}\n\nTask: Rewrite the User's Professional Summary and Work Experience highlights to perfectly align with this Job Description. Use industry keywords found in the JD. Maintain a factual but highly relevant tone. Do not invent experience, but emphasize existing matching skills.\n\nReturn JSON ONLY: { "summary": "...", "experience": [ { "company": "...", "role": "...", "bullets": ["...", "..."] } ] }`;
+  }
+
   return '';
 };

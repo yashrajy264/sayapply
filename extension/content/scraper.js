@@ -144,5 +144,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         sendResponse({ success: true, count: scrapedJobs.length });
     }
+
+    if (message.type === 'SCRAPE_PAGE_TEXT') {
+        // Try to find the job description container
+        const selectors = [
+            '.jobs-description', '.job-description', '#job-description',
+            '.description__text', '.job-details', '[class*="description"]',
+            'main', 'article'
+        ];
+
+        let jdText = "";
+        for (const s of selectors) {
+            const el = document.querySelector(s);
+            if (el && el.innerText.length > 200) {
+                jdText = el.innerText;
+                break;
+            }
+        }
+
+        // Fallback to body text but limited
+        if (!jdText) jdText = document.body.innerText.substring(0, 5000);
+
+        sendResponse({ success: true, text: jdText });
+    }
+
     return true;
 });

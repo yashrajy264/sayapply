@@ -72,8 +72,89 @@ const SearchTab = () => {
         });
     };
 
+    const [outreachData, setOutreachData] = useState(null);
+    const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false);
+
+    const handleGenerateOutreach = (e, job) => {
+        e.stopPropagation(); // Don't trigger the job URL navigation
+        setIsGeneratingOutreach(true);
+        setOutreachData(null);
+
+        chrome.runtime.sendMessage({
+            type: 'GENERATE_OUTREACH',
+            payload: { title: job.title, company: job.company, snippet: job.snippet }
+        }, (response) => {
+            setIsGeneratingOutreach(false);
+            if (response && response.success) {
+                setOutreachData(response.result);
+            } else {
+                alert("Failed to generate outreach: " + (response?.error || "Unknown error"));
+            }
+        });
+    };
+
     return (
-        <div className="flex flex-col gap-4 h-full">
+        <div className="flex flex-col gap-4 h-full relative">
+            {/* Outreach Modal */}
+            {(outreachData || isGeneratingOutreach) && (
+                <div className="absolute inset-0 z-50 bg-white/95 dark:bg-black/95 flex flex-col p-6 animate-in fade-in zoom-in duration-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-bold flex items-center gap-2">
+                            <span>✨</span> Outreach Assistant
+                        </h3>
+                        <button
+                            onClick={() => { setOutreachData(null); setIsGeneratingOutreach(false); }}
+                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    {isGeneratingOutreach ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                            <div className="w-6 h-6 border-2 border-[#10b981] border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs text-zinc-500">Drafting personalized messages...</p>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1">
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[10px] font-bold text-zinc-400 uppercase">LinkedIn Invite</label>
+                                    <button
+                                        onClick={() => { navigator.clipboard.writeText(outreachData.linkedin); alert("Copied!"); }}
+                                        className="text-[10px] text-[#10b981] font-bold hover:underline"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <div className="p-3 bg-zinc-50 dark:bg-[#111] border border-zinc-200 dark:border-[#333] rounded-lg text-xs leading-relaxed">
+                                    {outreachData.linkedin}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[10px] font-bold text-zinc-400 uppercase">Professional Email</label>
+                                    <button
+                                        onClick={() => { navigator.clipboard.writeText(outreachData.email); alert("Copied!"); }}
+                                        className="text-[10px] text-[#10b981] font-bold hover:underline"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <div className="p-3 bg-zinc-50 dark:bg-[#111] border border-zinc-200 dark:border-[#333] rounded-lg text-xs leading-relaxed">
+                                    {outreachData.email}
+                                </div>
+                            </div>
+
+                            <p className="text-[10px] text-zinc-400 text-center mt-2 italic">
+                                Tip: Personalize these further with the manager's name!
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="bg-white dark:bg-[#171717] rounded-xl border border-zinc-200 dark:border-[#333] p-4 shadow-sm">
                 <h2 className="text-sm font-semibold mb-3">Job Discovery</h2>
 
@@ -159,7 +240,7 @@ const SearchTab = () => {
 
                 <div className="flex flex-col gap-2">
                     {jobs.map((job, idx) => (
-                        <div key={idx} className="p-3 bg-zinc-50 dark:bg-[#0f0f0f] rounded-lg border border-zinc-200 dark:border-[#333] cursor-pointer hover:border-[#10b981] transition-colors group"
+                        <div key={idx} className="p-3 bg-zinc-50 dark:bg-[#0f0f0f] rounded-lg border border-zinc-200 dark:border-[#333] cursor-pointer hover:border-[#10b981] transition-colors group relative"
                             onClick={() => {
                                 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                                     chrome.tabs.update(tabs[0].id, { url: job.url });
@@ -169,14 +250,23 @@ const SearchTab = () => {
                             <div className="flex justify-between items-start mb-1">
                                 <h3 className="text-xs font-bold text-[#10b981] group-hover:underline flex-1 pr-2 line-clamp-2">{job.title}</h3>
                                 <div className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${job.score >= 80 ? 'bg-green-100 text-green-700' : job.score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                                    {job.score}% Match
+                                    {job.score}%
                                 </div>
                             </div>
                             <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mb-2">
                                 {job.company} • {job.location || 'Remote'}
                             </div>
-                            <div className="text-[10px] text-zinc-600 dark:text-zinc-300 italic">
+                            <div className="text-[10px] text-zinc-600 dark:text-zinc-300 italic mb-2 line-clamp-2">
                                 "{job.reason}"
+                            </div>
+
+                            <div className="flex justify-end pt-1 border-t border-zinc-100 dark:border-[#222] mt-1">
+                                <button
+                                    onClick={(e) => handleGenerateOutreach(e, job)}
+                                    className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-[#10b981] flex items-center gap-1 py-1 px-2 rounded hover:bg-[#10b981]/10 transition-colors"
+                                >
+                                    <span>📨</span> Draft Outreach
+                                </button>
                             </div>
                         </div>
                     ))}
