@@ -21,7 +21,7 @@ export const callGemini = async (prompt, apiKey, options = {}) => {
   };
 
   const endpoint = useSharedKey
-    ? 'http://localhost:3000/api/gemini'
+    ? 'https://sayapply.vercel.app/api/gemini'
     : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
   try {
